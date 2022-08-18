@@ -16,14 +16,13 @@
  * limitations under the License.
  */
 
-package com.example.flinkdemo;
+package xyz.demo.flink;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 
 /**
@@ -44,16 +43,18 @@ public class StreamingJob {
         // set up the streaming execution environment
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        DataStream<String> dataSet = env.socketTextStream("localhost", 9000, "\n");
-
-        SingleOutputStreamOperator<Tuple2<String, Integer>> words = dataSet.flatMap((FlatMapFunction<String, Tuple2<String, Integer>>) (value, out) -> {
-            for (String word : value.split("\\s")) {
-                out.collect(Tuple2.of(word, 1));
-            }
-        }).returns(Types.TUPLE(Types.STRING, Types.INT));
-
-        SingleOutputStreamOperator<Tuple2<String, Integer>> sum = words.keyBy(0).timeWindow(Time.seconds(5)).sum(1);
-        sum.print().setParallelism(1);
+        env.socketTextStream("localhost", 9000, "\n")
+                .flatMap((FlatMapFunction<String, Tuple2<String, Integer>>) (value, out) -> {
+                    for (String word : value.split("\\s")) {
+                        out.collect(Tuple2.of(word, 1));
+                    }
+                })
+                .returns(Types.TUPLE(Types.STRING, Types.INT))
+                .keyBy(tuple2 -> tuple2.f0)
+                .window(TumblingProcessingTimeWindows.of(Time.seconds(5)))
+                .sum(1)
+                .print()
+                .setParallelism(1);
 
         env.execute("Socket Window WordCount");
     }
